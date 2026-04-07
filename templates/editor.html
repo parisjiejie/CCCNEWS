@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}期刊编辑器{% endblock %}
+{% block content %}
+<h1 class="page-title">期刊编辑</h1>
+
+<form method="POST" action="{{ url_for('generate') }}" id="editorForm">
+  <!-- Issue metadata -->
+  <div class="card" style="margin-bottom: 20px;">
+    <h3 style="font-size: 15px; margin-bottom: 12px;">基本信息</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+      <div class="form-group">
+        <label>期号</label>
+        <input type="number" name="issue_number" class="form-control" value="{{ next_issue_number }}" required>
+      </div>
+      <div class="form-group">
+        <label>发行日期</label>
+        <input type="date" name="date" class="form-control" value="{{ today }}" required>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>主标题（日文，留空自动AI生成）</label>
+      <textarea name="headline" class="form-control" rows="2" placeholder="留空则自动通过AI生成日文标题..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>摘要（日文，留空自动AI生成）</label>
+      <textarea name="summary" class="form-control" rows="2" placeholder="留空则自动通过AI生成日文摘要..."></textarea>
+    </div>
+  </div>
+
+  <!-- Selected articles -->
+  <div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <h3 style="font-size: 15px;">已选择的文章</h3>
+      <span style="font-size: 13px; color: #888;">已选择 {{ selected_articles|length }} 篇文章</span>
+    </div>
+
+    {% if selected_articles|length < 6 %}
+    <div style="background: #fff3cd; color: #856404; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;">
+      文章少于6篇，建议到<a href="{{ url_for('articles') }}">文章管理</a>中选择更多文章。
+    </div>
+    {% endif %}
+
+    {% if selected_articles %}
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      {% set cat_colors = {'AI\u30fb\u5927\u898f\u6a21\u30e2\u30c7\u30eb': 0, 'IT\u30fb\u30af\u30e9\u30a6\u30c9': 1, '\u534a\u5c0e\u4f53\u30fb\u30cf\u30fc\u30c9': 2, '\u30c6\u30c3\u30af\u653f\u7b56': 3, '\u30b9\u30bf\u30fc\u30c8\u30a2\u30c3\u30d7': 4} %}
+      {% for article in selected_articles %}
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #FAF7F2; border-radius: 8px; gap: 12px;">
+        <input type="hidden" name="article_order" value="{{ article.id }}">
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 2px;">
+            <span class="badge badge-cat-{{ cat_colors.get(article.category, 0) }}">{{ article.category }}</span>
+            {% if article.ai_status == 'both_done' %}
+              <span class="badge badge-green">中日完成</span>
+            {% elif article.ai_status == 'cn_done' %}
+              <span class="badge badge-blue">中文完成</span>
+            {% elif article.ai_status == 'jp_done' %}
+              <span class="badge badge-orange">日文完成</span>
+            {% else %}
+              <span class="badge badge-gray">未生成</span>
+            {% endif %}
+          </div>
+          <div style="font-size: 14px; font-weight: 500;">
+            {% if article.title_jp %}
+              {{ article.title_jp }}
+              <span style="font-size: 11px; color: #999; margin-left: 6px;">({{ article.title[:30] }}{% if article.title|length > 30 %}...{% endif %})</span>
+            {% else %}
+              {{ article.title }}
+            {% endif %}
+          </div>
+          {% if article.summary_jp %}
+          <div style="font-size: 12px; color: #888; margin-top: 2px;">{{ article.summary_jp[:100] }}{% if article.summary_jp|length > 100 %}...{% endif %}</div>
+          {% elif article.summary %}
+          <div style="font-size: 12px; color: #888; margin-top: 2px;">{{ article.summary[:100] }}{% if article.summary|length > 100 %}...{% endif %}</div>
+          {% endif %}
+        </div>
+        <div style="flex-shrink: 0;">
+          <a href="{{ url_for('article_toggle', id=article.id) }}" class="btn btn-sm btn-secondary"
+             onclick="event.preventDefault(); document.getElementById('deselect-{{ article.id }}').submit();">取消选择</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="color: #888; font-size: 13px; text-align: center; padding: 20px;">
+      暂未选择文章。请到<a href="{{ url_for('articles') }}">文章管理</a>中选择文章。
+    </p>
+    {% endif %}
+  </div>
+
+  <!-- Generate button -->
+  <button type="submit" class="btn btn-primary" style="padding: 12px 32px; font-size: 15px;"
+    {% if not selected_articles %}disabled{% endif %}
+    onclick="this.disabled=true;this.textContent='生成中...';this.form.submit();">
+    生成期刊
+  </button>
+  <span style="font-size: 12px; color: #666; margin-left: 12px;">将自动生成AI日文标题、摘要、编辑后记及PDF</span>
+</form>
+
+<!-- Hidden deselect forms -->
+{% if selected_articles %}
+{% for article in selected_articles %}
+<form id="deselect-{{ article.id }}" method="POST" action="{{ url_for('article_toggle', id=article.id) }}" style="display:none;"></form>
+{% endfor %}
+{% endif %}
+{% endblock %}

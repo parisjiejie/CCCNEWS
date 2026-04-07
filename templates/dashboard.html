@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}仪表盘{% endblock %}
+{% block content %}
+<h1 class="page-title">仪表盘</h1>
+
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-value">{{ total_articles }}</div>
+    <div class="stat-label">文章总数</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ selected_count }}</div>
+    <div class="stat-label">已选择</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ new_articles }}</div>
+    <div class="stat-label">待处理</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ total_issues }}</div>
+    <div class="stat-label">已发行</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">#{{ latest_issue }}</div>
+    <div class="stat-label">最新期号</div>
+  </div>
+</div>
+
+{% if category_counts %}
+<div class="card" style="margin-bottom: 24px;">
+  <h3 style="font-size: 15px; margin-bottom: 12px;">分类统计</h3>
+  <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+    {% for cat, count in category_counts.items() %}
+    <div style="background: #F5F0E8; border-radius: 8px; padding: 10px 16px; text-align: center; min-width: 100px;">
+      <div style="font-size: 20px; font-weight: 700; color: #8B2252;">{{ count }}</div>
+      <div style="font-size: 11px; color: #666;">{{ cat }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom: 24px;">
+  <h3 style="font-size: 15px; margin-bottom: 12px;">最新文章</h3>
+  {% if recent_articles %}
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <thead>
+      <tr style="border-bottom: 2px solid #E8E0D4; text-align: left;">
+        <th style="padding: 8px 4px;">分类</th>
+        <th style="padding: 8px 4px;">标题</th>
+        <th style="padding: 8px 4px;">AI状态</th>
+        <th style="padding: 8px 4px;">状态</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for article in recent_articles %}
+      <tr style="border-bottom: 1px solid #F5F0E8;">
+        <td style="padding: 8px 4px;"><span class="badge badge-cat-{{ loop.index0 % 5 }}">{{ article.category }}</span></td>
+        <td style="padding: 8px 4px;">{{ article.title[:60] }}{% if article.title|length > 60 %}...{% endif %}</td>
+        <td style="padding: 8px 4px;">
+          {% if article.ai_status == 'both_done' %}
+            <span class="badge badge-green">中日完成</span>
+          {% elif article.ai_status == 'cn_done' %}
+            <span class="badge badge-blue">中文完成</span>
+          {% elif article.ai_status == 'jp_done' %}
+            <span class="badge badge-orange">日文完成</span>
+          {% else %}
+            <span class="badge badge-gray">未生成</span>
+          {% endif %}
+        </td>
+        <td style="padding: 8px 4px;">
+          {% if article.status == 'selected' %}
+            <span class="badge badge-burgundy">已选择</span>
+          {% elif article.status == 'used' %}
+            <span class="badge badge-green">已使用</span>
+          {% else %}
+            <span class="badge badge-gray">新文章</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color: #888; font-size: 13px;">暂无文章</p>
+  {% endif %}
+</div>
+
+<div style="display: flex; gap: 12px;">
+  <a href="{{ url_for('collect') }}" class="btn btn-primary">采集新闻</a>
+  <a href="{{ url_for('quick_generate') }}" class="btn btn-secondary">快速生成期刊</a>
+  <a href="{{ url_for('editor') }}" class="btn btn-secondary">手动创建期刊</a>
+</div>
+{% endblock %}
