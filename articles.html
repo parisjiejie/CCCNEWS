@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}文章管理{% endblock %}
+{% block content %}
+<h1 class="page-title">文章管理</h1>
+
+<!-- Filter bar -->
+<div class="card" style="margin-bottom: 20px;">
+  <form method="GET" action="{{ url_for('articles') }}" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+    <select name="category" class="form-control" style="width: auto; min-width: 140px;">
+      <option value="">全部分类</option>
+      {% for cat in categories %}
+      <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" class="form-control" style="width: auto; min-width: 120px;">
+      <option value="">全部状态</option>
+      <option value="new" {% if status_filter == 'new' %}selected{% endif %}>新文章</option>
+      <option value="selected" {% if status_filter == 'selected' %}selected{% endif %}>已选择</option>
+      <option value="used" {% if status_filter == 'used' %}selected{% endif %}>已使用</option>
+    </select>
+    <select name="ai_status" class="form-control" style="width: auto; min-width: 140px;">
+      <option value="">全部AI状态</option>
+      <option value="none" {% if ai_status_filter == 'none' %}selected{% endif %}>未生成</option>
+      <option value="has_cn" {% if ai_status_filter == 'has_cn' %}selected{% endif %}>有中文</option>
+      <option value="has_jp" {% if ai_status_filter == 'has_jp' %}selected{% endif %}>有日文</option>
+      <option value="both_done" {% if ai_status_filter == 'both_done' %}selected{% endif %}>中日完成</option>
+      <option value="cn_done" {% if ai_status_filter == 'cn_done' %}selected{% endif %}>仅中文</option>
+    </select>
+    <button type="submit" class="btn btn-secondary">筛选</button>
+    <span style="font-size: 13px; color: #888; margin-left: auto;">共 {{ articles|length }} 篇文章</span>
+  </form>
+</div>
+
+<!-- Selection toolbar -->
+<div class="card" style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+  <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="width: 16px; height: 16px; accent-color: #8B2252;">
+    全选
+  </label>
+  <span style="color: #ccc;">|</span>
+  <span id="selectedCount" style="font-size: 13px; color: #666;">已选 0 篇</span>
+  <span style="color: #ccc;">|</span>
+  <button class="btn btn-sm btn-warning" onclick="batchGenerateCN()" id="batchCNBtn" disabled>批量AI生成中文</button>
+  <button class="btn btn-sm btn-warning" onclick="batchGenerateJP()" id="batchJPBtn" disabled>批量AI生成日文</button>
+  <span style="color: #ccc;">|</span>
+  <button class="btn btn-sm btn-primary" onclick="batchSelectForIssue()" id="issueBtn" disabled>选为期刊内容 →</button>
+  <div class="spinner" id="batchSpinner"></div>
+  <span id="batchStatus" style="font-size: 13px; color: #666;"></span>
+</div>
+
+{% set cat_colors = {'AI・大規模モデル': 0, 'IT・クラウド': 1, '半導体・ハード': 2, 'テック政策': 3, 'スタートアップ': 4} %}
+
+<!-- Article list -->
+{% if articles %}
+<div style="display: flex; flex-direction: column; gap: 12px;">
+  {% for article in articles %}
+  <div class="card article-row" id="article-{{ article.id }}" style="{% if article.status == 'selected' %}border-left: 4px solid #8B2252;{% endif %} display: flex; flex-direction: column; gap: 8px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
+      <div style="display: flex; gap: 10px; flex: 1; min-width: 200px;">
+        <!-- Checkbox -->
+        <input type="checkbox" class="article-check" value="{{ article.id }}" onchange="updateSelectedCount()"
+               style="width: 18px; height: 18px; margin-top: 2px; accent-color: #8B2252; flex-shrink: 0;">
+        <div style="flex: 1;">
+          <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px; flex-wrap: wrap;">
+            <span class="badge badge-cat-{{ cat_colors.get(article.category, 0) }}">{{ article.category }}</span>
+            {% if article.status == 'selected' %}
+              <span class="badge badge-burgundy">已选择</span>
+            {% elif article.status == 'used' %}
+              <span class="badge badge-green">已使用</span>
+            {% else %}
+              <span class="badge badge-gray">新文章</span>
+            {% endif %}
+            {% if article.ai_status == 'both_done' %}
+              <span class="badge badge-green" id="ai-badge-{{ article.id }}">中日完成</span>
+            {% elif article.ai_status == 'cn_done' %}
+              <span class="badge badge-blue" id="ai-badge-{{ article.id }}">中文完成</span>
+            {% elif article.ai_status == 'jp_done' %}
+              <span class="badge badge-orange" id="ai-badge-{{ article.id }}">日文完成</span>
+            {% else %}
+              <span class="badge badge-gray" id="ai-badge-{{ article.id }}">未生成</span>
+            {% endif %}
+          </div>
+          <!-- Original title -->
+          <h3 style="font-size: 15px; font-weight: 500; margin-bottom: 2px;">{{ article.title }}</h3>
+          <!-- JP title if exists -->
+          {% if article.title_jp %}
+          <div style="font-size: 13px; color: #8B2252; margin-bottom: 2px;">🇯🇵 {{ article.title_jp }}</div>
+          {% endif %}
+          <!-- Summary -->
+          {% if article.summary %}
+          <p style="font-size: 12px; color: #888; margin-bottom: 2px;">{{ article.summary[:120] }}{% if article.summary|length > 120 %}...{% endif %}</p>
+          {% endif %}
+          <div style="font-size: 11px; color: #999;">{{ article.source }} | {{ article.collected_at }}</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; align-items: flex-start;">
+        <button class="btn btn-sm btn-warning" onclick="generateCN({{ article.id }}, this)">AI中文</button>
+        <button class="btn btn-sm btn-warning" onclick="generateJP({{ article.id }}, this)">AI日文</button>
+        <a href="{{ url_for('article_edit', id=article.id) }}" class="btn btn-sm btn-secondary">编辑</a>
+        <form method="POST" action="{{ url_for('article_delete', id=article.id) }}" style="display:inline;"
+              onsubmit="return confirm('确定删除？');">
+          <button type="submit" class="btn btn-sm btn-danger">删除</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 40px; color: #888;">
+  <p>暂无文章</p>
+  <a href="{{ url_for('collect') }}" class="btn btn-primary" style="margin-top: 12px;">去采集新闻</a>
+</div>
+{% endif %}
+
+<script>
+/* === Selection === */
+function getSelectedIds() {
+  return Array.from(document.querySelectorAll('.article-check:checked')).map(cb => parseInt(cb.value));
+}
+function updateSelectedCount() {
+  var ids = getSelectedIds();
+  document.getElementById('selectedCount').textContent = '已选 ' + ids.length + ' 篇';
+  var hasSelection = ids.length > 0;
+  document.getElementById('batchCNBtn').disabled = !hasSelection;
+  document.getElementById('batchJPBtn').disabled = !hasSelection;
+  document.getElementById('issueBtn').disabled = !hasSelection;
+}
+function toggleSelectAll() {
+  var checked = document.getElementById('selectAll').checked;
+  document.querySelectorAll('.article-check').forEach(cb => cb.checked = checked);
+  updateSelectedCount();
+}
+
+/* === Single AI generation === */
+function generateCN(id, btn) {
+  btn.disabled = true; btn.textContent = '生成中...';
+  fetch('/api/ai/generate-cn/' + id, {method: 'POST'}).then(r => r.json()).then(data => {
+    if (data.success) { btn.textContent = '完成'; btn.className = 'btn btn-sm btn-success'; updateAIBadge(id, data.ai_status); }
+    else { btn.textContent = '失败'; btn.disabled = false; alert(data.error || '失败'); }
+  }).catch(() => { btn.textContent = '失败'; btn.disabled = false; });
+}
+function generateJP(id, btn) {
+  btn.disabled = true; btn.textContent = '生成中...';
+  fetch('/api/ai/generate-jp/' + id, {method: 'POST'}).then(r => r.json()).then(data => {
+    if (data.success) { btn.textContent = '完成'; btn.className = 'btn btn-sm btn-success'; updateAIBadge(id, data.ai_status); }
+    else { btn.textContent = '失败'; btn.disabled = false; alert(data.error || '失败'); }
+  }).catch(() => { btn.textContent = '失败'; btn.disabled = false; });
+}
+function updateAIBadge(id, status) {
+  var b = document.getElementById('ai-badge-' + id);
+  if (!b) return;
+  b.className = 'badge';
+  if (status === 'both_done') { b.className += ' badge-green'; b.textContent = '中日完成'; }
+  else if (status === 'cn_done') { b.className += ' badge-blue'; b.textContent = '中文完成'; }
+  else if (status === 'jp_done') { b.className += ' badge-orange'; b.textContent = '日文完成'; }
+  else { b.className += ' badge-gray'; b.textContent = '未生成'; }
+}
+
+/* === Batch AI === */
+function batchGenerateCN() {
+  var ids = getSelectedIds();
+  if (!ids.length || !confirm('将为 ' + ids.length + ' 篇文章生成中文内容，确定？')) return;
+  var btn = document.getElementById('batchCNBtn');
+  var spinner = document.getElementById('batchSpinner');
+  var status = document.getElementById('batchStatus');
+  btn.disabled = true; spinner.classList.add('active');
+  status.textContent = '批量生成中文（' + ids.length + ' 篇）...';
+  fetch('/api/ai/batch-cn', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})})
+  .then(r => r.json()).then(data => {
+    spinner.classList.remove('active'); btn.disabled = false;
+    status.textContent = '完成: ' + data.processed + '/' + data.total + ' 篇成功';
+    if (data.processed > 0) setTimeout(() => location.reload(), 1500);
+  }).catch(e => { spinner.classList.remove('active'); btn.disabled = false; status.textContent = '失败'; });
+}
+function batchGenerateJP() {
+  var ids = getSelectedIds();
+  if (!ids.length || !confirm('将为 ' + ids.length + ' 篇文章生成日文内容（无中文的会自动先生成中文），确定？')) return;
+  var btn = document.getElementById('batchJPBtn');
+  var spinner = document.getElementById('batchSpinner');
+  var status = document.getElementById('batchStatus');
+  btn.disabled = true; spinner.classList.add('active');
+  status.textContent = '批量生成日文（' + ids.length + ' 篇）...每篇约10秒';
+  fetch('/api/ai/batch-jp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})})
+  .then(r => r.json()).then(data => {
+    spinner.classList.remove('active'); btn.disabled = false;
+    var msg = '完成: ' + data.processed + ' 篇成功';
+    if (data.skipped) msg += ', ' + data.skipped + ' 篇跳过(已有日文)';
+    if (data.errors) msg += ', ' + data.errors + ' 篇失败';
+    status.textContent = msg;
+    if (data.processed > 0) setTimeout(() => location.reload(), 1500);
+  }).catch(e => { spinner.classList.remove('active'); btn.disabled = false; status.textContent = '失败'; });
+}
+
+/* === Select for Issue === */
+function batchSelectForIssue() {
+  var ids = getSelectedIds();
+  if (!ids.length) return;
+
+  // Check if selected articles have JP content
+  var noJp = [];
+  ids.forEach(function(id) {
+    var badge = document.getElementById('ai-badge-' + id);
+    if (badge && badge.textContent !== '中日完成' && badge.textContent !== '日文完成') {
+      noJp.push(id);
+    }
+  });
+
+  if (noJp.length > 0) {
+    if (!confirm('有 ' + noJp.length + ' 篇文章尚未生成日文内容，建议先生成。是否仍然继续选为期刊内容？')) return;
+  }
+
+  var status = document.getElementById('batchStatus');
+  status.textContent = '正在设置期刊内容...';
+
+  fetch('/api/articles/batch-select', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ids: ids})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      status.textContent = data.message;
+      // Redirect to editor after short delay
+      setTimeout(() => { window.location.href = '/editor'; }, 800);
+    } else {
+      status.textContent = '失败: ' + (data.error || '');
+    }
+  })
+  .catch(e => { status.textContent = '请求失败'; });
+}
+</script>
+{% endblock %}

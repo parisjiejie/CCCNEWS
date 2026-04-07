@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}CCC 管理后台{% endblock %} - CCC Daily News</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans SC', sans-serif; background: #FAF7F2; color: #2D2D2D; display: flex; min-height: 100vh; }
+a { color: #8B2252; text-decoration: none; }
+a:hover { opacity: 0.8; }
+
+/* Sidebar */
+.sidebar { width: 240px; background: #2D2D2D; color: #F5F0E8; position: fixed; top: 0; left: 0; height: 100vh; display: flex; flex-direction: column; z-index: 100; transition: transform 0.3s; }
+.sidebar-logo { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.sidebar-logo h1 { font-size: 20px; font-weight: 700; color: #F5F0E8; }
+.sidebar-logo small { font-size: 11px; color: #E8E0D4; opacity: 0.7; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: #E8E0D4; font-size: 14px; transition: background 0.2s; }
+.sidebar-nav a:hover { background: rgba(255,255,255,0.05); opacity: 1; }
+.sidebar-nav a.active { background: #8B2252; color: #fff; font-weight: 500; }
+
+/* Mobile toggle */
+.mobile-toggle { display: none; position: fixed; top: 12px; left: 12px; z-index: 200; background: #2D2D2D; color: #F5F0E8; border: none; border-radius: 6px; padding: 8px 12px; font-size: 20px; cursor: pointer; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 99; }
+
+/* Main */
+.main { margin-left: 240px; flex: 1; padding: 32px; min-height: 100vh; }
+.page-title { font-size: 24px; font-weight: 700; margin-bottom: 24px; color: #2D2D2D; }
+
+/* Flash messages */
+.flash-container { position: fixed; top: 16px; right: 16px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+.flash-msg { padding: 12px 20px; border-radius: 8px; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); animation: flashIn 0.3s ease; }
+.flash-msg.success { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+.flash-msg.error { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+.flash-msg.warning { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
+.flash-msg.info, .flash-msg.message { background: #F5F0E8; color: #2D2D2D; border-left: 4px solid #8B2252; }
+@keyframes flashIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Cards */
+.card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #fff; border-radius: 10px; padding: 20px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.stat-card .stat-value { font-size: 32px; font-weight: 700; color: #8B2252; }
+.stat-card .stat-label { font-size: 12px; color: #666; margin-top: 4px; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 6px; border: none; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.2s; }
+.btn:hover { opacity: 0.85; }
+.btn-primary { background: #8B2252; color: #fff; }
+.btn-secondary { background: #E8E0D4; color: #2D2D2D; }
+.btn-danger { background: #dc3545; color: #fff; }
+.btn-success { background: #28a745; color: #fff; }
+.btn-warning { background: #ffc107; color: #2D2D2D; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Forms */
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: #2D2D2D; }
+.form-control { width: 100%; padding: 8px 12px; border: 1px solid #E8E0D4; border-radius: 6px; font-family: inherit; font-size: 14px; background: #FAF7F2; transition: border-color 0.2s; }
+.form-control:focus { outline: none; border-color: #8B2252; }
+textarea.form-control { resize: vertical; min-height: 80px; }
+select.form-control { appearance: auto; }
+
+/* Badges */
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+.badge-gray { background: #e9e5e0; color: #666; }
+.badge-burgundy { background: #8B2252; color: #fff; }
+.badge-green { background: #d4edda; color: #155724; }
+.badge-blue { background: #e3f2fd; color: #0d47a1; }
+.badge-orange { background: #fff3cd; color: #856404; }
+.badge-draft { background: #fff3cd; color: #856404; }
+.badge-cat-0 { background: #fce4ec; color: #880e4f; }
+.badge-cat-1 { background: #e3f2fd; color: #0d47a1; }
+.badge-cat-2 { background: #e8f5e9; color: #1b5e20; }
+.badge-cat-3 { background: #fff8e1; color: #f57f17; }
+.badge-cat-4 { background: #f3e5f5; color: #6a1b9a; }
+
+/* Spinner */
+.spinner { display: none; width: 20px; height: 20px; border: 2px solid #E8E0D4; border-top-color: #8B2252; border-radius: 50%; animation: spin 0.6s linear infinite; }
+.spinner.active { display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .mobile-toggle { display: block; }
+  .main { margin-left: 0; padding: 60px 16px 24px; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<button class="mobile-toggle" onclick="toggleSidebar()">&#9776;</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <h1>CCC 管理后台</h1>
+    <small>内容管理系统</small>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <span class="nav-icon">&#9632;</span> 仪表盘
+    </a>
+    <a href="{{ url_for('collect') }}" class="{% if request.endpoint and request.endpoint.startswith('collect') %}active{% endif %}">
+      <span class="nav-icon">&#10530;</span> 新闻采集
+    </a>
+    <a href="{{ url_for('articles') }}" class="{% if request.endpoint in ('articles', 'article_edit') %}active{% endif %}">
+      <span class="nav-icon">&#9998;</span> 文章管理
+    </a>
+    <a href="{{ url_for('editor') }}" class="{% if request.endpoint == 'editor' %}active{% endif %}">
+      <span class="nav-icon">&#9776;</span> 期刊编辑
+    </a>
+    <a href="{{ url_for('quick_generate') }}" class="{% if request.endpoint == 'quick_generate' %}active{% endif %}" style="{% if request.endpoint != 'quick_generate' %}background:rgba(139,34,82,0.15);{% endif %}">
+      <span class="nav-icon">&#9889;</span> 快速生成
+    </a>
+    <a href="{{ url_for('issues') }}" class="{% if request.endpoint and request.endpoint.startswith('issue') and request.endpoint not in ('issue_preview',) %}active{% endif %}">
+      <span class="nav-icon">&#9993;</span> 期刊管理
+    </a>
+    <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 8px 0;"></div>
+    <a href="{{ url_for('frontend_site') }}" target="_blank" style="color: #E8E0D4; opacity: 0.7;">
+      <span class="nav-icon">&#127760;</span> 前台预览 ↗
+    </a>
+  </nav>
+</aside>
+<main class="main">
+  <div class="flash-container" id="flashContainer">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash-msg {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+  {% block content %}{% endblock %}
+</main>
+<script>
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+setTimeout(function() {
+  document.querySelectorAll('.flash-msg').forEach(function(el) {
+    el.style.transition = 'opacity 0.3s';
+    el.style.opacity = '0';
+    setTimeout(function() { el.remove(); }, 300);
+  });
+}, 4000);
+</script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

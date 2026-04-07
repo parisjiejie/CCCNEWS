@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}快速生成{% endblock %}
+{% block content %}
+<h1 class="page-title">快速生成</h1>
+
+<div style="max-width:700px;">
+
+<!-- Step 1: Collect -->
+<div class="card" style="margin-bottom:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <h3 style="font-size:16px;">Step 1：一键采集</h3>
+    <span class="badge badge-gray" id="newCountBadge">可用文章：{{ new_count }} 篇</span>
+  </div>
+  <p style="font-size:13px;color:#666;margin-bottom:14px;">
+    通过Firecrawl搜索API，使用预设关键词（AI大模型、机器人、半导体、云计算等）自动搜索并导入最新中国科技资讯。
+  </p>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button type="button" class="btn btn-primary" id="btnCollect" onclick="doCollect()">
+      一键采集
+    </button>
+    <span id="statusCollect" style="font-size:13px;color:#666;display:none;">
+      <span class="spinner"></span> <span class="status-text">采集中...</span>
+    </span>
+  </div>
+</div>
+
+<!-- Step 2: AI Generate -->
+<div class="card" style="margin-bottom:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <h3 style="font-size:16px;">Step 2：AI批量生成</h3>
+  </div>
+  <p style="font-size:13px;color:#666;margin-bottom:14px;">
+    使用Qwen AI为所有新文章自动生成中文稿件和日文翻译。处理可能需要几分钟。
+  </p>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button type="button" class="btn btn-primary" id="btnAiGenerate" onclick="doAiGenerate()"
+      {% if new_count == 0 and selected_count == 0 %}disabled{% endif %}>
+      AI批量生成（中文+日文）
+    </button>
+    <span id="statusAiGenerate" style="font-size:13px;color:#666;display:none;">
+      <span class="spinner"></span> <span class="status-text">AI生成中（请耐心等待）...</span>
+    </span>
+  </div>
+</div>
+
+<!-- Step 3: Auto Select -->
+<div class="card" style="margin-bottom:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <h3 style="font-size:16px;">Step 3：自动选择</h3>
+    <span class="badge" id="selectedCountBadge">
+      已选择：<span id="selectedCountVal">{{ selected_count }}</span> 篇
+    </span>
+  </div>
+  <p style="font-size:13px;color:#666;margin-bottom:14px;">
+    系统自动从文章中选择6-8篇，确保分类均衡，优先选择AI生成完成的文章。选择后可在<a href="{{ url_for('articles') }}">文章管理</a>中手动调整。
+  </p>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button type="button" class="btn btn-primary" id="btnAutoSelect" onclick="doAutoSelect()"
+      {% if new_count == 0 and selected_count == 0 %}disabled{% endif %}>
+      自动选择
+    </button>
+    <a href="{{ url_for('articles', status='selected') }}" class="btn btn-secondary" id="viewSelectedLink"
+      style="{% if selected_count == 0 %}display:none;{% endif %}">
+      查看已选文章
+    </a>
+    <span id="statusAutoSelect" style="font-size:13px;color:#666;display:none;">
+      <span class="spinner"></span> <span class="status-text">选择中...</span>
+    </span>
+  </div>
+</div>
+
+<!-- Step 4: Generate PDF -->
+<div class="card" style="margin-bottom:16px;" id="step4Card">
+  <h3 style="font-size:16px;margin-bottom:10px;">Step 4：生成期刊</h3>
+  <p style="font-size:13px;color:#666;margin-bottom:14px;">
+    自动生成日文标题、摘要、编辑后记，并生成8页PDF期刊。
+  </p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+    <div class="form-group" style="margin-bottom:0;">
+      <label>期号</label>
+      <input type="number" id="issueNumber" class="form-control" value="{{ next_number }}" required>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label>日期</label>
+      <input type="date" id="issueDate" class="form-control" value="{{ today }}" required>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button type="button" class="btn btn-primary" id="btnGenerate" onclick="doGenerate()"
+      style="padding:10px 28px;font-size:15px;"
+      {% if selected_count < 1 %}disabled{% endif %}>
+      生成期刊PDF
+    </button>
+    <span id="statusGenerate" style="font-size:13px;color:#666;display:none;">
+      <span class="spinner"></span> <span class="status-text">生成中（请耐心等待）...</span>
+    </span>
+  </div>
+  <p id="warningMinArticles" style="font-size:12px;color:#856404;margin-top:8px;{% if selected_count >= 6 %}display:none;{% endif %}">
+    建议至少选择6篇文章后再生成
+  </p>
+</div>
+
+<!-- Recent Issues -->
+<div class="card">
+  <h3 style="font-size:15px;margin-bottom:12px;">最近生成的期刊</h3>
+  <div id="recentIssues" style="font-size:13px;color:#888;">加载中...</div>
+</div>
+
+</div>
+
+<style>
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ccc;
+  border-top-color: #8B2252;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.result-msg {
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+.result-msg.success { background: #d4edda; color: #155724; }
+.result-msg.error { background: #f8d7da; color: #721c24; }
+</style>
+
+<script>
+// Track current counts for dynamic updates
+let currentNewCount = {{ new_count }};
+let currentSelectedCount = {{ selected_count }};
+
+function updateBadges() {
+  document.getElementById('newCountBadge').textContent = '\u53ef\u7528\u6587\u7ae0\uff1a' + currentNewCount + ' \u7bc7';
+
+  const selBadge = document.getElementById('selectedCountBadge');
+  document.getElementById('selectedCountVal').textContent = currentSelectedCount;
+  selBadge.className = 'badge ' + (currentSelectedCount >= 6 ? 'badge-green' : (currentSelectedCount > 0 ? 'badge-burgundy' : 'badge-gray'));
+
+  // Update button states
+  const hasArticles = currentNewCount > 0 || currentSelectedCount > 0;
+  document.getElementById('btnAiGenerate').disabled = !hasArticles;
+  document.getElementById('btnAutoSelect').disabled = !hasArticles;
+  document.getElementById('btnGenerate').disabled = currentSelectedCount < 1;
+
+  // View selected link
+  document.getElementById('viewSelectedLink').style.display = currentSelectedCount > 0 ? '' : 'none';
+
+  // Step 4 card border
+  document.getElementById('step4Card').style.borderLeft = currentSelectedCount >= 6 ? '4px solid #8B2252' : '';
+
+  // Warning
+  document.getElementById('warningMinArticles').style.display = currentSelectedCount >= 6 ? 'none' : '';
+}
+
+function showStatus(id, show, text) {
+  const el = document.getElementById(id);
+  if (show) {
+    el.style.display = '';
+    if (text) el.querySelector('.status-text').textContent = text;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function showResult(afterEl, success, message) {
+  // Remove any existing result message next to this element's parent
+  const parent = afterEl.closest('.card');
+  const existing = parent.querySelector('.result-msg');
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.className = 'result-msg ' + (success ? 'success' : 'error');
+  div.textContent = message;
+  parent.appendChild(div);
+
+  // Auto-remove after 8 seconds
+  setTimeout(() => { if (div.parentNode) div.remove(); }, 8000);
+}
+
+async function doCollect() {
+  const btn = document.getElementById('btnCollect');
+  btn.disabled = true;
+  showStatus('statusCollect', true, '\u91c7\u96c6\u4e2d...');
+
+  try {
+    const resp = await fetch('/api/quick/collect', { method: 'POST' });
+    const data = await resp.json();
+    showStatus('statusCollect', false);
+
+    if (data.success) {
+      currentNewCount += (data.added || 0);
+      updateBadges();
+    }
+    showResult(btn, data.success, data.message);
+  } catch (e) {
+    showStatus('statusCollect', false);
+    showResult(btn, false, '\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5');
+  }
+  btn.disabled = false;
+}
+
+async function doAiGenerate() {
+  const btn = document.getElementById('btnAiGenerate');
+  btn.disabled = true;
+  showStatus('statusAiGenerate', true, 'AI\u751f\u6210\u4e2d\uff08\u8bf7\u8010\u5fc3\u7b49\u5f85\uff09...');
+
+  try {
+    const resp = await fetch('/api/quick/ai-generate', { method: 'POST' });
+    const data = await resp.json();
+    showStatus('statusAiGenerate', false);
+    showResult(btn, data.success, data.message);
+  } catch (e) {
+    showStatus('statusAiGenerate', false);
+    showResult(btn, false, '\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5');
+  }
+  btn.disabled = false;
+}
+
+async function doAutoSelect() {
+  const btn = document.getElementById('btnAutoSelect');
+  btn.disabled = true;
+  showStatus('statusAutoSelect', true, '\u9009\u62e9\u4e2d...');
+
+  try {
+    const resp = await fetch('/api/quick/auto-select', { method: 'POST' });
+    const data = await resp.json();
+    showStatus('statusAutoSelect', false);
+
+    if (data.success) {
+      currentSelectedCount = data.selected_count || 0;
+      // Articles moved from new to selected
+      currentNewCount = Math.max(0, currentNewCount - currentSelectedCount);
+      updateBadges();
+    }
+    showResult(btn, data.success, data.message);
+  } catch (e) {
+    showStatus('statusAutoSelect', false);
+    showResult(btn, false, '\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5');
+  }
+  btn.disabled = false;
+}
+
+async function doGenerate() {
+  const btn = document.getElementById('btnGenerate');
+  const issueNumber = document.getElementById('issueNumber').value;
+  const issueDate = document.getElementById('issueDate').value;
+
+  if (!issueNumber || !issueDate) {
+    showResult(btn, false, '\u8bf7\u586b\u5199\u671f\u53f7\u548c\u65e5\u671f');
+    return;
+  }
+
+  btn.disabled = true;
+  showStatus('statusGenerate', true, '\u751f\u6210\u4e2d\uff08\u8bf7\u8010\u5fc3\u7b49\u5f85\uff09...');
+
+  try {
+    const resp = await fetch('/api/quick/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issue_number: parseInt(issueNumber), date: issueDate })
+    });
+    const data = await resp.json();
+    showStatus('statusGenerate', false);
+
+    if (data.success && data.issue_id) {
+      showResult(btn, true, data.message + ' \u6b63\u5728\u8df3\u8f6c...');
+      setTimeout(() => {
+        window.location.href = '/issues/' + data.issue_id + '/preview';
+      }, 1000);
+    } else {
+      showResult(btn, false, data.message || data.error);
+      btn.disabled = false;
+    }
+  } catch (e) {
+    showStatus('statusGenerate', false);
+    showResult(btn, false, '\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5');
+    btn.disabled = false;
+  }
+}
+
+// Initialize badge styles
+updateBadges();
+
+// Load recent issues
+fetch('{{ url_for("api_recent_issues") }}')
+  .then(r => r.json())
+  .then(data => {
+    const el = document.getElementById('recentIssues');
+    if (!data.issues || data.issues.length === 0) {
+      el.innerHTML = '<p style="color:#888">\u6682\u65e0\u671f\u520a</p>';
+      return;
+    }
+    let html = '';
+    data.issues.forEach(issue => {
+      const statusBadge = issue.status === 'published'
+        ? '<span class="badge badge-green">\u5df2\u53d1\u5e03</span>'
+        : '<span class="badge badge-burgundy">\u5df2\u751f\u6210</span>';
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F5F0E8;">
+        <div>
+          <strong style="color:#8B2252">#${issue.issue_number}</strong> ${statusBadge}
+          <span style="margin-left:8px">${issue.headline ? issue.headline.substring(0,40) : ''}${issue.headline && issue.headline.length > 40 ? '...' : ''}</span>
+          <span style="color:#999;margin-left:8px">${issue.date}</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <a href="/issues/${issue.id}/preview" class="btn btn-sm btn-secondary">\u9884\u89c8</a>
+          <a href="/issues/${issue.id}/download" class="btn btn-sm btn-primary">\u4e0b\u8f7dPDF</a>
+        </div>
+      </div>`;
+    });
+    el.innerHTML = html;
+  })
+  .catch(() => {
+    document.getElementById('recentIssues').innerHTML = '<p style="color:#888">\u52a0\u8f7d\u5931\u8d25</p>';
+  });
+</script>
+{% endblock %}
